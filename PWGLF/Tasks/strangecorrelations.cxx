@@ -52,6 +52,72 @@ using FullTracksExtIU = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCo
 using FullTracksExtWithPID = soa::Join<aod::Tracks, aod::TracksExtra, aod::TracksCov, aod::TracksDCA, aod::pidTPCPi, aod::pidTPCKa, aod::pidTPCPr>;
 using FullTracksExtIUWithPID = soa::Join<aod::TracksIU, aod::TracksExtra, aod::TracksCovIU, aod::TracksDCA, aod::pidTPCPi, aod::pidTPCKa, aod::pidTPCPr>;
 
+// Let's try to add a column to the cascdataext table: IsSelected. 
+// In the future this will probably also be a way to tell Xi's and Omega's apart
+namespace o2::aod
+{
+namespace cascadeflags
+{
+DECLARE_SOA_COLUMN(IsSelected, isSelected, int); //~!
+} // namespace cascadeflags
+DECLARE_SOA_TABLE(CascadeFlags, "AOD", "CASCADEFLAGS", //!
+                  cascadeflags::IsSelected);
+using CascDataExtSelected = soa::Join<CascDataExt, CascadeFlags>;
+}
+
+// Should we make a separate struct with "cascadeSelector" here?
+// The process function of this would then produce the CascadeFlags table. 
+struct cascadeSelector {
+  Produces<aod::CascadeFlags> cascflags;
+
+  // histo's
+  HistogramRegistry registry{
+    "registry",
+    {
+      {"hMassXiMinus", "hMassXiMinus", {HistType::kTH1F, {{3000, 0.0f, 3.0f, "Inv. Mass (GeV/c^{2})"}}}},
+    },
+  };
+
+  void process(soa::Join<aod::Collisions, aod::EvSels>::iterator const& collision, aod::CascDataExt const& Cascades, aod::V0sLinked const&, aod::V0Datas const&, FullTracksExtIUWithPID const&){
+    for (auto& casc : Cascades){
+      auto v0 = casc.v0_as<o2::aod::V0sLinked>();
+      if (!(v0.has_v0Data())) {
+        cascflags(0);
+        continue; // reject if no v0data
+      }
+      auto v0data = v0.v0Data();
+      
+      // Let's try to do some PID
+      // these are the tracks:
+      auto bachTrack = casc.bachelor_as<FullTracksExtIUWithPID>();
+      auto posTrack = v0data.posTrack_as<FullTracksExtIUWithPID>();
+      auto negTrack = v0data.negTrack_as<FullTracksExtIUWithPID>();
+
+      //Bachelor check: Regardless of sign, should be pion (Xi) or kaon (Omega TODO)
+      if (TMath::Abs(bachTrack.tpcNSigmaPi()) > 3) {
+        cascflags(0);
+        continue;
+      }
+
+      if (casc.sign() < 0){ // FIXME: only Xi for now, implement Omega's TODO
+        //Proton check: 
+        if (TMath::Abs(posTrack.tpcNSigmaPr()) > 3) {
+          cascflags(0);
+          continue;
+        }
+        //Pion check:
+        if (TMath::Abs(negTrack.tpcNSigmaPi()) > 3) {
+          cascflags(0);
+          continue;
+        }
+      } // PID checks
+      // if we reach here, candidate is good!
+      cascflags(1);
+    } // cascade loop
+  } // process
+}; // struct
+
+
 struct cascadeCorrelations {
   // Basic checks
   HistogramRegistry registry{
@@ -62,101 +128,99 @@ struct cascadeCorrelations {
       {"hMassOmegaMinus", "hMassOmegaMinus", {HistType::kTH1F, {{3000, 0.0f, 3.0f, "Inv. Mass (GeV/c^{2})"}}}},
       {"hMassOmegaPlus", "hMassOmegaPlus", {HistType::kTH1F, {{3000, 0.0f, 3.0f, "Inv. Mass (GeV/c^{2})"}}}},
 
-      {"hV0Radius", "hV0Radius", {HistType::kTH1F, {{1000, 0.0f, 100.0f, "cm"}}}},
-      {"hCascRadius", "hCascRadius", {HistType::kTH1F, {{1000, 0.0f, 100.0f, "cm"}}}},
-      {"hV0CosPA", "hV0CosPA", {HistType::kTH1F, {{1000, 0.95f, 1.0f}}}},
-      {"hCascCosPA", "hCascCosPA", {HistType::kTH1F, {{1000, 0.95f, 1.0f}}}},
-      {"hDCAPosToPV", "hDCAPosToPV", {HistType::kTH1F, {{1000, -10.0f, 10.0f, "cm"}}}},
-      {"hDCANegToPV", "hDCANegToPV", {HistType::kTH1F, {{1000, -10.0f, 10.0f, "cm"}}}},
-      {"hDCABachToPV", "hDCABachToPV", {HistType::kTH1F, {{1000, -10.0f, 10.0f, "cm"}}}},
-      {"hDCAV0ToPV", "hDCAV0ToPV", {HistType::kTH1F, {{1000, -10.0f, 10.0f, "cm"}}}},
-      {"hDCAV0Dau", "hDCAV0Dau", {HistType::kTH1F, {{1000, 0.0f, 10.0f, "cm^{2}"}}}},
-      {"hDCACascDau", "hDCACascDau", {HistType::kTH1F, {{1000, 0.0f, 10.0f, "cm^{2}"}}}},
-      {"hLambdaMass", "hLambdaMass", {HistType::kTH1F, {{1000, 0.0f, 10.0f, "Inv. Mass (GeV/c^{2})"}}}},
-
       {"hPhi", "hPhi", {HistType::kTH1F, {{100, 0, 2*PI, "#varphi"}}}},
-      {"hMinPos", "hMinPos", {HistType::kTH1F, {{100, -0.5*PI, 1.5*PI, "#Delta#varphi"}}}},
-      {"hMinMin", "hMinMin", {HistType::kTH1F, {{100, -0.5*PI, 1.5*PI, "#Delta#varphi"}}}},
-      {"hPosPos", "hPosPos", {HistType::kTH1F, {{100, -0.5*PI, 1.5*PI, "#Delta#varphi"}}}},
+
+      {"hDeltaPhiSS", "hDeltaPhiSS", {HistType::kTH1F, {{100, -PI/2, 1.5*PI, "#Delta#varphi"}}}},
+      {"hDeltaPhiOS", "hDeltaPhiOS", {HistType::kTH1F, {{100, -PI/2, 1.5*PI, "#Delta#varphi"}}}},
     },
   };
 
-  // split into Xi+ and Xi- HAS TO BE HERE BEFORE PROCESS
-  Partition<aod::CascDataExt> minCascades = aod::cascdata::sign < 0;
-  Partition<aod::CascDataExt> posCascades = aod::cascdata::sign > 0;
+  Filter Selector = aod::cascadeflags::isSelected > 0;
 
-  void process(aod::Collision const& collision, aod::CascDataExt const& Cascades, aod::V0sLinked const&, aod::V0Datas const&, FullTracksExtIU const&)
+  void process(soa::Join<aod::Collisions, aod::EvSels>::iterator const& collision, soa::Filtered<aod::CascDataExtSelected> const& Cascades, aod::V0sLinked const&, aod::V0Datas const&, FullTracksExtIU const&)
   {
-    // partitions are not grouped by default
-    auto minCascadesGrouped = minCascades->sliceByCached(aod::cascdata::collisionId, collision.globalIndex());
-    auto posCascadesGrouped = posCascades->sliceByCached(aod::cascdata::collisionId, collision.globalIndex());
-    
-    for (auto& [minCascade, posCascade] : combinations(o2::soa::CombinationsFullIndexPolicy(minCascadesGrouped, posCascadesGrouped))){ // TODO: fix combination policy and grouping
-
-      auto posv0 = posCascade.v0_as<o2::aod::V0sLinked>();
-      auto minv0 = minCascade.v0_as<o2::aod::V0sLinked>();
-
-      // not sure why this is needed or why we do this, it seems to cause a segfault
-      if (!(posv0.has_v0Data()) || !(minv0.has_v0Data())) {
-        return; //skip those cascades for which V0 doesn't exist
-      }      
-      auto posv0Data = posv0.v0Data();
-      auto minv0Data = minv0.v0Data();
-
-      // // Let's try to do some PID
-      // // these are the tracks:
-      // auto bachTrack = minCascade.bachelor_as<FullTracksExtIUWithPID>();
-      // auto posTrack = minv0.posTrack_as<FullTracksExtIUWithPID>();
-      // auto negTrack = minv0.negTrack_as<FullTracksExtIUWithPID>();
-
-      // //Bachelor check:
-      // if (TMath::Abs(bachTrack.tpcNSigmaPi()) > 3)
-      //   continue;
-      // //Proton check: 
-      // if (TMath::Abs(posTrack.tpcNSigmaPr()) > 3)
-      //   continue;
-      // //Pion check:
-      // if (TMath::Abs(negTrack.tpcNSigmaPi()) > 3)
-      //   continue;
-
-      // the ID's so we can make sure we don't double count
-      int negBachId = minCascade.bachelorId();
-      int negTrackId = minv0.negTrackId();
-      int posBachId = posCascade.bachelorId();
-      int posTrackId = posv0.posTrackId();
-
-      if(posTrackId != posBachId && negTrackId != negBachId){ // make sure there is no overlap between tracks used
-        registry.fill(HIST("hMinPos"), RecoDecay::phi(minCascade.px(), minCascade.py()) - RecoDecay::phi(posCascade.px(), posCascade.py()));
-      }
-    }
-
+    // some QA on the cascades
     for (auto& casc : Cascades) {
+
+      auto v0 = casc.v0_as<o2::aod::V0sLinked>();
+      if (!(v0.has_v0Data())) {
+        continue; // reject if no v0data
+      }
+      auto v0data = v0.v0Data();
+      
       if (casc.sign() < 0) { // FIXME: could be done better...
+        // Check if we don't use the same pion twice in single cascade reco
+        if (casc.bachelorId() == v0data.negTrackId()) LOGF(info, "autocorrelation in neg cascade! %d %d", casc.bachelorId(), v0data.negTrackId());
         registry.fill(HIST("hMassXiMinus"), casc.mXi());
         registry.fill(HIST("hMassOmegaMinus"), casc.mOmega());
       } else {
+        // Check if we don't use the same pion twice in single cascade reco
+        if (casc.bachelorId() == v0data.posTrackId()) LOGF(info, "autocorrelation in pos cascade! %d %d", casc.bachelorId(), v0data.negTrackId());
         registry.fill(HIST("hMassXiPlus"), casc.mXi());
         registry.fill(HIST("hMassOmegaPlus"), casc.mOmega());
       }
-      // The basic eleven!
-      registry.fill(HIST("hV0Radius"), casc.v0radius());
-      registry.fill(HIST("hCascRadius"), casc.cascradius());
-      registry.fill(HIST("hV0CosPA"), casc.v0cosPA(collision.posX(), collision.posY(), collision.posZ()));
-      registry.fill(HIST("hCascCosPA"), casc.casccosPA(collision.posX(), collision.posY(), collision.posZ()));
-      registry.fill(HIST("hDCAPosToPV"), casc.dcapostopv());
-      registry.fill(HIST("hDCANegToPV"), casc.dcanegtopv());
-      registry.fill(HIST("hDCABachToPV"), casc.dcabachtopv());
-      registry.fill(HIST("hDCAV0ToPV"), casc.dcav0topv(collision.posX(), collision.posY(), collision.posZ()));
-      registry.fill(HIST("hDCAV0Dau"), casc.dcaV0daughters());
-      registry.fill(HIST("hDCACascDau"), casc.dcacascdaughters());
-      registry.fill(HIST("hLambdaMass"), casc.mLambda());
+
       registry.fill(HIST("hPhi"), RecoDecay::phi(casc.px(), casc.py()));
-    }
-  }
-};
+    } // casc loop
+
+    for (auto& [c0, c1] : combinations(Cascades, Cascades)) { // combinations automatically applies strictly upper in case of 2 identical tables
+      auto lambda0 = c0.v0_as<o2::aod::V0sLinked>();
+      auto lambda1 = c1.v0_as<o2::aod::V0sLinked>();
+        if (!(lambda0.has_v0Data()) || !(lambda1.has_v0Data())) {
+          continue; // reject if no v0data in either of the lambda's
+        }
+      auto v0data0 = lambda0.v0Data();
+      auto v0data1 = lambda1.v0Data();
+
+      LOGF(info, "Found a cascade pair!"); // casc table doesn't have global indices, makes no sense to print them (will just be numbered like 0,1,2,...)
+      double phi0 = RecoDecay::phi(c0.px(), c0.py());
+      double phi1 = RecoDecay::phi(c1.px(), c1.py());
+      double dphi = std::fmod(phi0 - phi1 + 2.5*PI, 2*PI) - 0.5*PI;
+      if(c0.sign()*c1.sign() < 0){ // OS
+        registry.fill(HIST("hDeltaPhiOS"), dphi);
+      } else { // SS
+        // Let's see if we have many autocorrelations?
+        // Should only be prevalent in SS due to pions, lambda's
+        // Let's first check if the lambda's aren't the same:
+        if(v0data0.v0Id() == v0data1.v0Id()) {
+          LOGF(info, "same v0 in SS correlation! %d %d", v0data0.v0Id(), v0data1.v0Id());
+          continue;
+        }
+        int BachId0 = c0.bachelorId();
+        int BachId1 = c1.bachelorId();
+        int PosId0 = v0data0.posTrackId();
+        int NegId0 = v0data0.negTrackId();
+        int PosId1 = v0data1.posTrackId();
+        int NegId1 = v0data1.negTrackId();
+        if(BachId0 == BachId1){
+          LOGF(info, "same bachelor in SS correlation! %d %d", BachId0, BachId1);
+          continue;
+        }
+        // check for same tracks in v0's of cascades
+        if (NegId0 == NegId1 || PosId0 == PosId1) {
+          LOGF(info, "cascades have a v0-track in common in SS correlation!");
+          continue;
+        }
+        if (c0.sign() < 0){ // min cascade
+          if (NegId0 == BachId1 || NegId1 == BachId0) {
+            LOGF(info, "bach of casc == v0-pion of other casc in neg SS correlation!");
+            continue;
+          }
+        } else { // pos cascade
+          if (PosId0 == BachId1 || PosId1 == BachId0) {
+            LOGF(info, "bach of casc == v0-pion of other casc in pos SS correlation!");
+            continue;
+          }
+        }
+        registry.fill(HIST("hDeltaPhiSS"), dphi);
+      }
+    } // correlations
+  } // process
+}; //struct
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
 {
   return WorkflowSpec{
+    adaptAnalysisTask<cascadeSelector>(cfgc),
     adaptAnalysisTask<cascadeCorrelations>(cfgc)};
 }
