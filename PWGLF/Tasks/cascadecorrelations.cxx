@@ -130,7 +130,7 @@ struct cascadeSelector {
         }
         cascflags(1);
         continue;
-      } else if (TMath::Abs(bachTrack.tpcNSigmaKa()) < tpcNsigmaBachelor || tpcNsigmaBachelor >=10) {
+      } else if (TMath::Abs(bachTrack.tpcNSigmaKa()) < tpcNsigmaBachelor || tpcNsigmaBachelor >= 10) {
         cascflags(2);
         continue;
       }
