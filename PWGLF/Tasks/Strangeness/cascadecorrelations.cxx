@@ -157,7 +157,7 @@ struct cascadeSelector {
   {
     ccdb->setURL(ccdburl);
     ccdb->setCaching(true);
-    
+
     auto h = registry.add<TH1>("hSelectionStatus", "hSelectionStatus", HistType::kTH1I, {{10, 0, 10, "status"}});
     h->GetXaxis()->SetBinLabel(1, "All");
     h->GetXaxis()->SetBinLabel(2, "nTPC OK");
@@ -168,26 +168,26 @@ struct cascadeSelector {
     h->GetXaxis()->SetBinLabel(7, "Bach PID OK");
   }
   void process(myCollisions::iterator const& collision, aod::CascDataExt const& Cascades, FullTracksExtIUWithPID const&, aod::BCsWithTimestamps const&)
-  { 
+  {
     bool evSel = true;
-    if(useTrigger){
+    if (useTrigger) {
       auto bc = collision.bc_as<aod::BCsWithTimestamps>();
       zorro.initCCDB(ccdb.service, bc.runNumber(), bc.timestamp(), triggerList);
       bool eventTrigger = zorro.isSelected(bc.globalBC());
-      if(eventTrigger){
+      if (eventTrigger) {
         registry.fill(HIST("hTriggerQA"), 1);
-      } else { 
+      } else {
         registry.fill(HIST("hTriggerQA"), 0);
         evSel = false;
       }
     }
-    
+
     if ((doSel8 && !collision.sel8()) || (doTFBorderCut && !collision.selection_bit(aod::evsel::kNoTimeFrameBorder))) {
       evSel = false; // do not skip the collision - this will lead to the cascadeFlag table having less entries than the Cascade table, and therefor not joinable.
     }
 
     for (auto& casc : Cascades) {
-      if(!evSel) {
+      if (!evSel) {
         cascflags(0);
         continue;
       }
@@ -310,7 +310,7 @@ struct cascadeSelector {
       // if we reach here, the bachelor was neither pion nor kaon
       cascflags(0);
     } // cascade loop
-  }   // process
+  } // process
 };    // struct
 
 struct cascadeCorrelations {
@@ -330,8 +330,8 @@ struct cascadeCorrelations {
   Configurable<bool> doSel8{"doSel8", true, "Switch to apply sel8 event selection"};
 
   AxisSpec invMassAxis = {1000, 1.0f, 2.0f, "Inv. Mass (GeV/c^{2})"};
-  AxisSpec deltaPhiAxis = {180, -PI / 2, 1.5 * PI, "#Delta#varphi"}; // 180 is divisible by 18 (tpc sectors) and 20 (run 2 binning)
-  AxisSpec deltaYAxis = {40, -2*maxRapidity, 2*maxRapidity, "#Delta y"}; // TODO: narrower range?
+  AxisSpec deltaPhiAxis = {180, -PI / 2, 1.5 * PI, "#Delta#varphi"};         // 180 is divisible by 18 (tpc sectors) and 20 (run 2 binning)
+  AxisSpec deltaYAxis = {40, -2 * maxRapidity, 2 * maxRapidity, "#Delta y"}; // TODO: narrower range?
   AxisSpec ptAxis = {150, 0, 15, "#it{p}_{T}"};
   AxisSpec selectionFlagAxis = {4, -0.5f, 3.5f, "Selection flag of casc candidate"};
   AxisSpec vertexAxis = {200, -10.0f, 10.0f, "cm"};
@@ -444,13 +444,13 @@ struct cascadeCorrelations {
 
   void processSameEvent(myCollisionsMult::iterator const& collision, myCascades const& Cascades, aod::V0sLinked const&, aod::V0Datas const&, FullTracksExtIU const&, aod::BCsWithTimestamps const&)
   {
-    if(useTrigger){
+    if (useTrigger) {
       auto bc = collision.bc_as<aod::BCsWithTimestamps>();
       zorro.initCCDB(ccdb.service, bc.runNumber(), bc.timestamp(), triggerList);
       bool eventTrigger = zorro.isSelected(bc.globalBC());
-      if(eventTrigger){
+      if (eventTrigger) {
         registry.fill(HIST("hTriggerQA"), 1);
-      } else { 
+      } else {
         registry.fill(HIST("hTriggerQA"), 0);
         return;
       }
