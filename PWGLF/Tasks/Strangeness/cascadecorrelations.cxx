@@ -313,7 +313,7 @@ struct CascadeSelector {
       cascflags(0);
     } // cascade loop
   } // process
-};    // struct
+}; // struct
 
 struct CascadeCorrelations {
   Service<o2::ccdb::BasicCCDBManager> ccdb;
@@ -838,13 +838,13 @@ struct CascadeCorrelations {
           }
         } // same sign
       } // correlations
-    }   // collisions
+    } // collisions
   }     // process mixed events
 
   PROCESS_SWITCH(cascadeCorrelations, processSameEvent, "Process same events", true);
   PROCESS_SWITCH(cascadeCorrelations, processMixedEvent, "Process mixed events", true);
 
-};    // struct
+}; // struct
 
 WorkflowSpec defineDataProcessing(ConfigContext const& cfgc)
 {
